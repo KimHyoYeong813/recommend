@@ -7,6 +7,37 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_NAME = "직무별_단순빈도_TOP10(final).csv"
 CSV_PATH = os.path.join(BASE_DIR, CSV_NAME)
 
+# === 0-1. 세부 역량 매핑 (예시) ===
+# 여기 내용을 네 데이터/생각에 맞게 자유롭게 수정하면 됨!
+DETAIL_MAP = {
+    "웹개발": [
+        "HTML/CSS 마크업 이해",
+        "JavaScript 기본 문법 및 DOM 조작",
+        "프론트엔드 프레임워크 경험 (예: React, Vue)",
+        "웹 프레임워크 사용 경험 (예: Django, Spring, Node.js)",
+        "REST API 연동 경험",
+        "반응형 웹, 크로스 브라우저 이슈 이해",
+        "Git 등 형상관리 도구 사용 경험"
+    ],
+    "서버개발": [
+        "하나 이상의 서버 언어 사용 경험 (예: Java, Python, Node.js)",
+        "웹 프레임워크 경험 (예: Spring Boot, Django, Express)",
+        "RDBMS 설계 및 SQL 활용",
+        "API 설계 및 문서화 경험",
+        "배포/운영 환경 이해 (Linux, Cloud, Docker 등)",
+        "로그 분석 및 모니터링 기본"
+    ],
+    "데이터분석": [
+        "Python 기반 데이터 분석 (Pandas, NumPy)",
+        "시각화 도구 활용 (Matplotlib, Seaborn, Plotly 등)",
+        "기본 통계 지식 및 가설검정",
+        "기계학습 라이브러리 사용 (scikit-learn 등)",
+        "데이터 전처리 및 피처 엔지니어링",
+        "SQL을 활용한 데이터 추출 경험"
+    ],
+    # 필요할 때 계속 추가!
+}
+
 
 # === 1. 데이터 로드 함수 ===
 @st.cache_data
@@ -85,11 +116,12 @@ def main():
         st.stop()
 
     selected_category = st.selectbox(
-        "관심 있는 직무(분야)를 선택하세요",
+        "관심 있는 직무(분야)를 선택하세요:",
         options=categories,
         index=0,
     )
 
+    st.write(f"### 선택한 분야: **{selected_category}**")
 
     # === 2️⃣ 선택한 분야 상위 키워드 ===
     filtered_df = filter_by_category(df, selected_category)
@@ -114,12 +146,37 @@ def main():
         drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
         display_df = filtered_df.drop(columns=drop_cols, errors="ignore")
 
-        view_cols = ["요구 역량", "count"]
+        view_cols = ["요구 역량", "COUNT"]
         display_df = display_df[view_cols]
 
         st.dataframe(display_df, use_container_width=True)
 
+        
 
+        # === 3️⃣ 세부 역량 보기 ===
+        st.subheader("3️⃣ 선택한 요구 역량의 세부 역량")
+
+        # 현재 선택된 분야 내에서만 선택 가능하도록
+        skill_options = display_df["요구 역량"].unique().tolist()
+
+        selected_skill = st.selectbox(
+            "세부 역량을 보고 싶은 요구 역량을 선택하세요:",
+            options=skill_options,
+        )
+
+        st.write(f"**선택한 요구 역량:** {selected_skill}")
+
+        details = DETAIL_MAP.get(selected_skill)
+
+        if details:
+            st.markdown("**🔍 이 역량을 위해 도움이 되는 세부 역량 예시:**")
+            for d in details:
+                st.markdown(f"- {d}")
+        else:
+            st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
+
+
+  
 
 
 if __name__ == "__main__":
