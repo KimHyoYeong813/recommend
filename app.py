@@ -120,7 +120,7 @@ def main():
 
     st.write(f"### 선택한 분야: **{selected_category}**")
 
-    # === 2️⃣ 선택한 분야 상위 키워드 (행 클릭 → 세부 역량) ===
+    # === 2️⃣ 선택한 분야 상위 키워드 (행의 '선택' → 세부 역량) ===
     st.subheader("2️⃣ 선택한 분야 상위 키워드 (행의 '선택'을 클릭하면 세부 역량이 나와요)")
 
     filtered_df = filter_by_category(df, selected_category)
@@ -141,55 +141,54 @@ def main():
 
         # 테이블용 컬럼 정리
         drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
-        table_df = filtered_df.drop(columns=drop_cols, errors="ignore")
+        base_df = filtered_df.drop(columns=drop_cols, errors="ignore")
 
-        # 순위, 요구 역량, count + 선택 컬럼 추가
         view_cols = ["순위", "요구 역량", "count"]
-        existing_cols = [c for c in view_cols if c in table_df.columns]
+        existing_cols = [c for c in view_cols if c in base_df.columns]
         if not existing_cols:
             st.error(
                 f"표시할 컬럼(순위, 요구 역량, count)을 찾을 수 없습니다. "
-                f"현재 컬럼: {list(table_df.columns)}"
+                f"현재 컬럼: {list(base_df.columns)}"
             )
             st.stop()
 
-        table_df = table_df[existing_cols]
+        base_df = base_df[existing_cols]
 
-        # ✅ 선택용 체크박스 컬럼 추가
-        # 카테고리가 바뀌면 선택 상태를 초기화하기 위해 session_state에 같이 관리
+        # ✅ 선택 상태를 카테고리별로 관리
         state_key = "skills_table_state"
+        selected_idx_key = "selected_row_idx"
 
+        # 카테고리가 바뀌면 상태 초기화
         if (
             state_key not in st.session_state
             or st.session_state.get("current_category") != selected_category
         ):
-            # 새 카테고리 선택 시 초기화
+            table_df = base_df.copy()
             table_df["선택"] = False
-            st.session_state[state_key] = table_df.copy()
+            st.session_state[state_key] = table_df
             st.session_state["current_category"] = selected_category
+            st.session_state[selected_idx_key] = None
         else:
-            # 기존 상태 유지
-            # (컬럼 구조가 바뀌었을 가능성은 거의 없지만 혹시 몰라서 align)
+            # 기존 상태 사용 (컬럼 align)
             prev_df = st.session_state[state_key]
-            table_df = table_df.copy()
+            table_df = base_df.copy()
             if "선택" not in prev_df.columns:
                 prev_df["선택"] = False
-            # 인덱스/순위가 동일하다고 가정하고 업데이트
+            # 인덱스 기준으로 선택 상태 복원
             table_df["선택"] = prev_df["선택"].reindex(table_df.index).fillna(False)
-            st.session_state[state_key] = table_df.copy()
 
-        st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭해 보세요.")
+        st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면 아래에 세부 역량이 나타납니다.")
 
-        # 클릭 가능한 테이블 (체크박스)
+        # 🔹 편집 가능한 테이블 (체크박스)
         editor_df = st.data_editor(
-            st.session_state[state_key],
+            table_df,
             key="skills_editor",
             use_container_width=True,
             hide_index=True,
             column_config={
                 "선택": st.column_config.CheckboxColumn(
                     "선택",
-                    help="세부 역량을 보고 싶은 항목을 체크하세요.",
+                    help="세부 역량을 보고 싶은 항목을 체크하세요. (하나만 선택됩니다)",
                 ),
                 "순위": st.column_config.NumberColumn("순위", disabled=True),
                 "요구 역량": st.column_config.TextColumn("요구 역량", disabled=True),
@@ -197,33 +196,69 @@ def main():
             },
         )
 
-        # 변경된 상태를 다시 저장 (체크박스 선택 유지)
-        st.session_state[state_key] = editor_df
+        # === ✅ 하나만 선택되도록 강제하는 로직 ===
+        df_final = editor_df.copy()
+        prev_idx = st.session_state.get(selected_idx_key, None)
 
-        # 체크된 행 찾기
-        selected_rows = editor_df[editor_df.get("선택", False) == True]
+        if "선택" in df_final.columns:
+            true_indices = df_final.index[df_final["선택"] == True].tolist()
 
+            if not true_indices:
+                # 아무 것도 선택 안 된 상태
+                selected_idx = None
+            elif len(true_indices) == 1:
+                # 하나만 선택된 상태
+                selected_idx = true_indices[0]
+            else:
+                # 2개 이상 체크된 경우 → 이전 선택과 비교해서 "새로 클릭된 것"만 남기기
+                if prev_idx in true_indices:
+                    candidates = [i for i in true_indices if i != prev_idx]
+                    selected_idx = candidates[-1] if candidates else prev_idx
+                else:
+                    selected_idx = true_indices[-1]
+
+            # 이제 selected_idx만 True, 나머지는 False로 강제
+            if selected_idx is None:
+                df_final["선택"] = False
+            else:
+                df_final["선택"] = False
+                if selected_idx in df_final.index:
+                    df_final.loc[selected_idx, "선택"] = True
+
+            st.session_state[selected_idx_key] = selected_idx
+        else:
+            selected_idx = None
+
+        # 상태 업데이트
+        st.session_state[state_key] = df_final
+
+        # === 아래에 세부 역량 출력 ===
         st.markdown("---")
         st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
 
-        if selected_rows.empty:
+        if selected_idx is None:
             st.caption("위 표에서 보고 싶은 요구 역량 행의 **선택** 칸을 클릭하면, 이 아래에 세부 역량이 나타납니다.")
         else:
-            # 여러 개 체크되어 있어도 첫 번째만 사용
-            selected_skill = selected_rows.iloc[0]["요구 역량"]
-            st.write(f"**선택한 요구 역량:** {selected_skill}")
+            try:
+                selected_skill = df_final.loc[selected_idx, "요구 역량"]
+            except Exception:
+                selected_skill = None
 
-            details = DETAIL_MAP.get(selected_skill)
-
-            if details:
-                st.markdown("**이 역량을 위해 도움이 되는 세부 역량 예시:**")
-                for d in details:
-                    st.markdown(f"- {d}")
+            if not selected_skill:
+                st.caption("선택한 요구 역량 정보를 불러오는 중 문제가 발생했습니다.")
             else:
-                st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
+                st.write(f"**선택한 요구 역량:** {selected_skill}")
 
-       
+                details = DETAIL_MAP.get(selected_skill)
 
+                if details:
+                    st.markdown("**이 역량을 위해 도움이 되는 세부 역량 예시:**")
+                    for d in details:
+                        st.markdown(f"- {d}")
+                else:
+                    st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
+
+    
 
 if __name__ == "__main__":
     main()
