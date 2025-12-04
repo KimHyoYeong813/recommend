@@ -7,14 +7,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_NAME = "직무별_단순빈도_TOP10(final).csv"
 CSV_PATH = os.path.join(BASE_DIR, CSV_NAME)
 
-# === 0-1. 세부 역량 매핑 (여기에 많이 넣어도 OK) ===
+# === 0-1. 세부 역량 매핑 (여기에 많이 넣어도 됨) ===
 DETAIL_MAP = {
     "웹개발": [
         "HTML/CSS 마크업 기본 및 시맨틱 태그 이해",
         "JavaScript 기본 문법 및 DOM 조작",
         "프론트엔드 프레임워크 사용 경험 (예: React, Vue)",
-        "웹 프레임워크 사용 경험 (예: Django, Spring, Node.js 등)",
-        "REST API 연동 및 JSON 데이터 처리 경험",
+        "백엔드 API 연동 및 JSON 처리 경험",
+        "웹 프레임워크 경험 (예: Django, Spring, Node.js 등)",
         "반응형 웹, 크로스 브라우저 이슈 이해",
         "Git 등 형상관리 도구 사용 경험",
     ],
@@ -34,13 +34,18 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # 여기에 "소프트웨어개발", "앱개발" 등 원하는 만큼 계속 추가하면 됨
+    # TODO: 여기다가 "소프트웨어개발", "앱개발", "정보보안" 등 계속 추가하면 됨
 }
 
 
 # === 1. 데이터 로드 함수 ===
 @st.cache_data
 def load_keyword_data():
+    """
+    직무별_단순빈도_TOP10(final).csv 파일을 읽어서 DataFrame으로 반환.
+    인코딩 문제 대비: utf-8-sig → cp949 순으로 시도.
+    필수 컬럼: category, word, count, total_posts
+    """
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"CSV 파일을 찾을 수 없습니다: {CSV_PATH}")
 
@@ -58,17 +63,19 @@ def load_keyword_data():
 
 
 def get_categories(df: pd.DataFrame):
+    """category 컬럼에서 선택 가능한 직무 목록 가져오기."""
     return sorted(df["category"].dropna().unique().tolist())
 
 
 def filter_by_category(df: pd.DataFrame, category_value: str):
+    """
+    선택한 category(직무) 기준으로 데이터 필터링.
+    - count 내림차순 정렬
+    - word -> '요구 역량'으로 컬럼명 변경
+    """
     filtered = df[df["category"] == category_value].copy()
     filtered = filtered.sort_values("count", ascending=False).reset_index(drop=True)
-
-    # 순위 1부터 시작
-    filtered["순위"] = range(1, len(filtered) + 1)
     filtered.rename(columns={"word": "요구 역량"}, inplace=True)
-
     return filtered
 
 
@@ -76,6 +83,21 @@ def main():
     st.set_page_config(
         page_title="AI 역량 키워드 뷰어",
         layout="wide",
+    )
+
+    # === 화면 패딩 줄이기 (1rem 정도) ===
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.title("📊 분야별 자주 요구되는 AI 역량 키워드")
@@ -98,7 +120,7 @@ def main():
         st.stop()
 
     selected_category = st.selectbox(
-        "관심 있는 직무(분야)를 선택하세요:",
+        
         options=categories,
         index=0,
     )
@@ -120,31 +142,31 @@ def main():
             total_posts_value = int(filtered_df["total_posts"].iloc[0])
         except Exception:
             total_posts_value = filtered_df["total_posts"].iloc[0]
+
     if total_posts_value is not None:
         st.caption(f"전체 공고 수: {total_posts_value}")
 
-    # 표에 보여줄 컬럼
-    table_df = filtered_df[["순위", "요구 역량", "count"]].copy()
-    table_df.index = range(1, len(table_df) + 1)  # 1~10 인덱스
+    # 표에 보여줄 컬럼 (순위 제거, 요구 역량 / count만)
+    table_df = filtered_df[["요구 역량", "count"]].copy()
+    table_df.index = range(1, len(table_df) + 1)  # 1~N 인덱스 표시용
 
     st.dataframe(table_df, use_container_width=True)
 
-    # 표 바로 아래에서 "요구 역량" 단일 선택
-    st.markdown("**세부 역량을 보고 싶은 요구 역량을 선택해 보세요.**")
+    # 표 아래 라디오 선택
+    st.markdown("**세부 역량을 보고 싶은 키워드를 선택하세요.**")
 
     skill_options = table_df["요구 역량"].tolist()
     selected_skill = st.radio(
-        "요구 역량 선택",
         options=skill_options,
-        index=0,  # 첫 번째 기본 선택
+        index=0,
         horizontal=False,
     )
 
     # 🔍 세부 역량 표시
     st.markdown("---")
     st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
-
     st.write(f"**선택한 요구 역량:** {selected_skill}")
+
 
     details = DETAIL_MAP.get(selected_skill)
     if details:
@@ -155,7 +177,6 @@ def main():
         st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
    
-
 
 if __name__ == "__main__":
     main()
