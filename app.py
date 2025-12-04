@@ -34,7 +34,7 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # 필요하면 계속 추가!
+    # TODO: 여기다가 "앱개발", "AI 서비스 기획" 등도 계속 추가하면 됨
 }
 
 
@@ -118,127 +118,110 @@ def main():
         index=0,
     )
 
-    st.write(f"### 선택한 분야: **{selected_category}**")
+    
 
     # === 2️⃣ 선택한 분야 상위 키워드 (행의 '선택' → 세부 역량) ===
-    st.subheader("2️⃣ 선택한 분야 상위 키워드 (행의 '선택'을 클릭하면 세부 역량이 나와요)")
+    st.subheader("2️⃣ 선택한 분야 상위 키워드 ")
 
     filtered_df = filter_by_category(df, selected_category)
 
     if filtered_df.empty:
         st.warning("해당 데이터가 없습니다.")
-    else:
-        # 전체 공고 수 표시
-        total_posts_value = None
-        if "total_posts" in filtered_df.columns:
-            try:
-                total_posts_value = int(filtered_df["total_posts"].iloc[0])
-            except Exception:
-                total_posts_value = filtered_df["total_posts"].iloc[0]
+        return
 
-        if total_posts_value is not None:
-            st.caption(f"전체 공고 수: {total_posts_value}")
+    # 전체 공고 수 표시
+    total_posts_value = None
+    if "total_posts" in filtered_df.columns:
+        try:
+            total_posts_value = int(filtered_df["total_posts"].iloc[0])
+        except Exception:
+            total_posts_value = filtered_df["total_posts"].iloc[0]
 
-        # 테이블용 기본 데이터 (순위, 요구 역량, count)
-        drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
-        base_df = filtered_df.drop(columns=drop_cols, errors="ignore")
+    if total_posts_value is not None:
+        st.caption(f"전체 공고 수: {total_posts_value}")
 
-        view_cols = ["순위", "요구 역량", "count"]
-        existing_cols = [c for c in view_cols if c in base_df.columns]
-        if not existing_cols:
-            st.error(
-                f"표시할 컬럼(순위, 요구 역량, count)을 찾을 수 없습니다. "
-                f"현재 컬럼: {list(base_df.columns)}"
-            )
-            st.stop()
+    # 테이블에 보여줄 기본 컬럼 (순위, 요구 역량, count)
+    drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
+    base_df = filtered_df.drop(columns=drop_cols, errors="ignore")
 
-        base_df = base_df[existing_cols]
-
-        # ✅ 카테고리가 바뀌면 상태 초기화
-        state_key = "skills_table_state"
-        selected_idx_key = "selected_row_idx"
-
-        if (
-            state_key not in st.session_state
-            or st.session_state.get("current_category") != selected_category
-        ):
-            table_df = base_df.copy()
-            table_df["선택"] = False
-            st.session_state[state_key] = table_df
-            st.session_state["current_category"] = selected_category
-            st.session_state[selected_idx_key] = None
-        else:
-            # 기존 상태 유지
-            prev_df = st.session_state[state_key]
-            table_df = base_df.copy()
-            if "선택" not in prev_df.columns:
-                prev_df["선택"] = False
-            table_df["선택"] = prev_df["선택"].reindex(table_df.index).fillna(False)
-
-        st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면, 아래에 세부 역량이 나타납니다. (항상 하나만 선택됩니다)")
-
-        # 🔹 편집 가능한 테이블 (체크박스 포함)
-        editor_df = st.data_editor(
-            table_df,
-            key="skills_editor",
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "선택": st.column_config.CheckboxColumn(
-                    "선택",
-                    help="세부 역량을 보고 싶은 항목을 체크하세요. (하나만 선택됩니다)",
-                ),
-                "순위": st.column_config.NumberColumn("순위", disabled=True),
-                "요구 역량": st.column_config.TextColumn("요구 역량", disabled=True),
-                "count": st.column_config.NumberColumn("count", disabled=True),
-            },
+    view_cols = ["순위", "요구 역량", "count"]
+    existing_cols = [c for c in view_cols if c in base_df.columns]
+    if not existing_cols:
+        st.error(
+            f"표시할 컬럼(순위, 요구 역량, count)을 찾을 수 없습니다. "
+            f"현재 컬럼: {list(base_df.columns)}"
         )
+        st.stop()
 
-        # === ✅ 여기서 "무조건 하나만" 선택되도록 강제 ===
-        df_final = editor_df.copy()
+    base_df = base_df[existing_cols]
 
-        selected_indices = df_final.index[df_final.get("선택", False) == True].tolist()
+    # === ✅ 선택 상태: "현재 선택된 요구 역량 이름"만 기억 ===
+    selected_skill_state_key = "selected_skill"
+    current_category_key = "current_category"
 
-        if not selected_indices:
-            selected_idx = None
+    # 카테고리가 바뀌면 선택 초기화
+    if st.session_state.get(current_category_key) != selected_category:
+        st.session_state[current_category_key] = selected_category
+        st.session_state[selected_skill_state_key] = None
+
+    current_selected_skill = st.session_state.get(selected_skill_state_key)
+
+    # 현재 선택된 요구 역량에 맞춰 "선택" 컬럼 구성
+    table_df = base_df.copy()
+    table_df["선택"] = table_df["요구 역량"] == current_selected_skill
+
+    st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면, 아래에 세부 역량이 나타납니다. ")
+
+    # 편집 가능한 테이블
+    editor_df = st.data_editor(
+        table_df,
+        key="skills_editor",
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "선택": st.column_config.CheckboxColumn(
+                "선택",
+                help="세부 역량을 보고 싶은 항목을 체크하세요.",
+            ),
+            "순위": st.column_config.NumberColumn("순위", disabled=True),
+            "요구 역량": st.column_config.TextColumn("요구 역량", disabled=True),
+            "count": st.column_config.NumberColumn("count", disabled=True),
+        },
+    )
+
+    # 🔍 사용자가 이번에 체크한 값들 기반으로 "선택된 요구 역량" 하나만 갱신
+    new_checked_rows = editor_df[editor_df.get("선택", False) == True]
+
+    if new_checked_rows.empty:
+        new_selected_skill = None
+    else:
+        # 여러 개 체크돼 있어도 "가장 아래(마지막) 행" 기준으로 선택
+        new_selected_skill = new_checked_rows.iloc[-1]["요구 역량"]
+
+    # 상태 업데이트
+    st.session_state[selected_skill_state_key] = new_selected_skill
+
+    # === 아래에 세부 역량 출력 ===
+    st.markdown("---")
+    st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
+
+    selected_skill = st.session_state.get(selected_skill_state_key)
+
+    if not selected_skill:
+        st.caption("위 표에서 보고 싶은 요구 역량 행의 **선택** 칸을 클릭하면, 아래에 세부 역량이 나타납니다.")
+    else:
+        st.write(f"**선택한 요구 역량:** {selected_skill}")
+
+        details = DETAIL_MAP.get(selected_skill)
+
+        if details:
+            st.markdown("**이 역량을 위해 도움이 되는 세부 역량 예시:**")
+            for d in details:
+                st.markdown(f"- {d}")
         else:
-            # 여러 개 체크되어 있으면 "가장 마지막에 체크된 것"만 남기고 나머지는 해제
-            selected_idx = selected_indices[-1]
-            df_final["선택"] = False
-            if selected_idx in df_final.index:
-                df_final.loc[selected_idx, "선택"] = True
+            st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
-        # 상태 저장
-        st.session_state[state_key] = df_final
-        st.session_state[selected_idx_key] = selected_idx
-
-        # === 아래에 세부 역량 출력 ===
-        st.markdown("---")
-        st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
-
-        if selected_idx is None:
-            st.caption("위 표에서 보고 싶은 요구 역량 행의 **선택** 칸을 클릭하면, 이 아래에 세부 역량이 나타납니다.")
-        else:
-            try:
-                selected_skill = df_final.loc[selected_idx, "요구 역량"]
-            except Exception:
-                selected_skill = None
-
-            if not selected_skill:
-                st.caption("선택한 요구 역량 정보를 불러오는 중 문제가 발생했습니다.")
-            else:
-                st.write(f"**선택한 요구 역량:** {selected_skill}")
-
-                details = DETAIL_MAP.get(selected_skill)
-
-                if details:
-                    st.markdown("**이 역량을 위해 도움이 되는 세부 역량 예시:**")
-                    for d in details:
-                        st.markdown(f"- {d}")
-                else:
-                    st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
-
-    
+   
 
 
 if __name__ == "__main__":
