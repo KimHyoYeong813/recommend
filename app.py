@@ -34,18 +34,13 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # TODO: 여기다가 "소프트웨어개발", "앱개발", "정보보안" 등 계속 추가하면 됨
+    # TODO: 계속 추가 가능
 }
 
 
 # === 1. 데이터 로드 함수 ===
 @st.cache_data
 def load_keyword_data():
-    """
-    직무별_단순빈도_TOP10(final).csv 파일을 읽어서 DataFrame으로 반환.
-    인코딩 문제 대비: utf-8-sig → cp949 순으로 시도.
-    필수 컬럼: category, word, count, total_posts
-    """
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"CSV 파일을 찾을 수 없습니다: {CSV_PATH}")
 
@@ -63,16 +58,10 @@ def load_keyword_data():
 
 
 def get_categories(df: pd.DataFrame):
-    """category 컬럼에서 선택 가능한 직무 목록 가져오기."""
     return sorted(df["category"].dropna().unique().tolist())
 
 
 def filter_by_category(df: pd.DataFrame, category_value: str):
-    """
-    선택한 category(직무) 기준으로 데이터 필터링.
-    - count 내림차순 정렬
-    - word -> '요구 역량'으로 컬럼명 변경
-    """
     filtered = df[df["category"] == category_value].copy()
     filtered = filtered.sort_values("count", ascending=False).reset_index(drop=True)
     filtered.rename(columns={"word": "요구 역량"}, inplace=True)
@@ -85,7 +74,7 @@ def main():
         layout="wide",
     )
 
-    # === 화면 패딩 줄이기 (1rem 정도) ===
+    # === 화면 패딩 줄이기 ===
     st.markdown(
         """
         <style>
@@ -120,7 +109,7 @@ def main():
         st.stop()
 
     selected_category = st.selectbox(
-        
+        "관심 있는 분야를 선택하세요:",
         options=categories,
         index=0,
     )
@@ -136,27 +125,20 @@ def main():
         st.stop()
 
     # 전체 공고 수 표시
-    total_posts_value = None
     if "total_posts" in filtered_df.columns:
-        try:
-            total_posts_value = int(filtered_df["total_posts"].iloc[0])
-        except Exception:
-            total_posts_value = filtered_df["total_posts"].iloc[0]
-
-    if total_posts_value is not None:
+        total_posts_value = filtered_df["total_posts"].iloc[0]
         st.caption(f"전체 공고 수: {total_posts_value}")
 
-    # 표에 보여줄 컬럼 (순위 제거, 요구 역량 / count만)
     table_df = filtered_df[["요구 역량", "count"]].copy()
-    table_df.index = range(1, len(table_df) + 1)  # 1~N 인덱스 표시용
+    table_df.index = range(1, len(table_df) + 1)
 
     st.dataframe(table_df, use_container_width=True)
 
-    # 표 아래 라디오 선택
     st.markdown("**세부 역량을 보고 싶은 키워드를 선택하세요.**")
 
     skill_options = table_df["요구 역량"].tolist()
     selected_skill = st.radio(
+        "요구 역량 선택:",
         options=skill_options,
         index=0,
         horizontal=False,
@@ -164,19 +146,15 @@ def main():
 
     # 🔍 세부 역량 표시
     st.markdown("---")
-    st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
-    st.write(f"**선택한 요구 역량:** {selected_skill}")
-
+    st.markdown(f"### 🔍 {selected_skill}의 세부 역량")
 
     details = DETAIL_MAP.get(selected_skill)
     if details:
-        st.markdown("**이 역량을 위해 도움이 되는 세부 역량 예시:**")
         for d in details:
             st.markdown(f"- {d}")
     else:
         st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
-   
 
 if __name__ == "__main__":
     main()
