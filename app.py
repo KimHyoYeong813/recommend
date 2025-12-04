@@ -7,7 +7,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_NAME = "직무별_단순빈도_TOP10(final).csv"
 CSV_PATH = os.path.join(BASE_DIR, CSV_NAME)
 
-# === 세부 역량 매핑 ===
+# === 0-1. 세부 역량 매핑 (여기에 많이 넣어도 됨) ===
 DETAIL_MAP = {
     "웹개발": [
         "HTML/CSS 마크업 기본 및 시맨틱 태그 이해",
@@ -34,11 +34,11 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # 필요하면 여기 계속 추가
+    # TODO: 계속 추가 가능
 }
 
 
-# === 데이터 로드 ===
+# === 1. 데이터 로드 함수 ===
 @st.cache_data
 def load_keyword_data():
     if not os.path.exists(CSV_PATH):
@@ -53,6 +53,7 @@ def load_keyword_data():
     missing = required_cols - set(df.columns)
     if missing:
         raise KeyError(f"다음 컬럼이 CSV에 없습니다: {missing}")
+
     return df
 
 
@@ -68,63 +69,93 @@ def filter_by_category(df: pd.DataFrame, category_value: str):
 
 
 def main():
-    st.set_page_config(page_title="AI 역량 키워드 뷰어", layout="wide")
+    st.set_page_config(
+        page_title="AI 역량 키워드 뷰어",
+        layout="wide",
+    )
 
-    # 데이터 읽기
-    df = load_keyword_data()
+    # === 화면 패딩 줄이기 ===
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.title("📊 분야별 자주 요구되는 AI 역량 키워드")
+
+    # 데이터 로드
+    try:
+        df = load_keyword_data()
+    except Exception as e:
+        st.error(f"❌ 데이터 오류 발생: {e}")
+        st.stop()
+
+    st.caption("현재 CSV 컬럼: " + ", ".join(df.columns.astype(str)))
+
+    # 1️⃣ 직무 선택
+    st.subheader("1️⃣ 관심 있는 직무 선택")
+
     categories = get_categories(df)
+    if not categories:
+        st.error("category 컬럼에 값이 없습니다. CSV 데이터를 확인해 주세요.")
+        st.stop()
 
-    # 🔲 양옆 여백용 컬럼 (왼쪽 비움 / 가운데 사용 / 오른쪽 비움)
-    # 비율 [1, 4, 1]이라 가운데 4, 양 옆 1씩 여백 느낌
-    left_col, main_col, right_col = st.columns([1, 4, 1])
+    selected_category = st.selectbox(
+        "관심 있는 분야를 선택하세요:",
+        options=categories,
+        index=0,
+    )
 
-    with main_col:
-        # 제목
-        st.title("📊 분야별 AI 역량 키워드")
+    st.write(f"### 선택한 분야: **{selected_category}**")
 
-        # 직무 선택 (라벨은 빈 문자열)
-        selected_category = st.selectbox(
-            "",
-            options=categories,
-            index=0,
-        )
+    # 2️⃣ 상위 키워드 표 + 라디오 선택
+    st.subheader("2️⃣ 선택한 분야 상위 키워드")
 
-        # 필터링
-        filtered_df = filter_by_category(df, selected_category)
+    filtered_df = filter_by_category(df, selected_category)
+    if filtered_df.empty:
+        st.warning("해당 데이터가 없습니다.")
+        st.stop()
 
-        # 전체 공고 수
-        if "total_posts" in filtered_df.columns:
-            st.caption(f"전체 공고 수: {filtered_df['total_posts'].iloc[0]}")
+    # 전체 공고 수 표시
+    if "total_posts" in filtered_df.columns:
+        total_posts_value = filtered_df["total_posts"].iloc[0]
+        st.caption(f"전체 공고 수: {total_posts_value}")
 
-        # 상위 키워드 표
-        table_df = filtered_df[["요구 역량", "count"]].copy()
-        table_df.index = range(1, len(table_df) + 1)
-        st.dataframe(table_df, use_container_width=True)
+    table_df = filtered_df[["요구 역량", "count"]].copy()
+    table_df.index = range(1, len(table_df) + 1)
 
-        # 요구 역량 선택 (라벨 비움)
-        skill_options = table_df["요구 역량"].tolist()
-        if not skill_options:
-            st.warning("표시할 요구 역량이 없습니다.")
-            return
+    st.dataframe(table_df, use_container_width=True)
 
-        selected_skill = st.radio(
-            "",
-            options=skill_options,
-            index=0,
-            horizontal=False,
-        )
+    st.markdown("**세부 역량을 보고 싶은 키워드를 선택하세요.**")
 
-        # 세부 역량 출력
-        st.markdown("---")
-        st.markdown(f"### 🔍 {selected_skill}의 세부 역량")
+    skill_options = table_df["요구 역량"].tolist()
+    selected_skill = st.radio(
+        "요구 역량 선택:",
+        options=skill_options,
+        index=0,
+        horizontal=False,
+    )
 
-        details = DETAIL_MAP.get(selected_skill)
-        if details:
-            for d in details:
-                st.markdown(f"- {d}")
-        else:
-            st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
+    # 🔍 세부 역량 표시
+    st.markdown("---")
+    st.markdown(f"### 🔍 {selected_skill}의 세부 역량")
+
+    details = DETAIL_MAP.get(selected_skill)
+    if details:
+        for d in details:
+            st.markdown(f"- {d}")
+    else:
+        st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
 
 if __name__ == "__main__":
     main()
+
