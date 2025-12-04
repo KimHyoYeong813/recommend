@@ -1,10 +1,11 @@
 # app.py
 import streamlit as st
-import pandas as pd
 
-from backend.backend import load_keyword_data, get_categories, filter_by_category
+# ❌ 잘못된 버전
+# from backend.backend import load_keyword_data, get_categories, filter_by_category
 
-
+# ✅ 올바른 import (파일명: backend/data_service.py)
+from backend.data_service import load_keyword_data, get_categories, filter_by_category
 
 
 @st.cache_data
