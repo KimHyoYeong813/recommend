@@ -139,7 +139,7 @@ def main():
         if total_posts_value is not None:
             st.caption(f"전체 공고 수: {total_posts_value}")
 
-        # 테이블용 컬럼 정리
+        # 테이블용 기본 데이터 (순위, 요구 역량, count)
         drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
         base_df = filtered_df.drop(columns=drop_cols, errors="ignore")
 
@@ -154,11 +154,10 @@ def main():
 
         base_df = base_df[existing_cols]
 
-        # ✅ 선택 상태를 카테고리별로 관리
+        # ✅ 카테고리가 바뀌면 상태 초기화
         state_key = "skills_table_state"
         selected_idx_key = "selected_row_idx"
 
-        # 카테고리가 바뀌면 상태 초기화
         if (
             state_key not in st.session_state
             or st.session_state.get("current_category") != selected_category
@@ -169,17 +168,16 @@ def main():
             st.session_state["current_category"] = selected_category
             st.session_state[selected_idx_key] = None
         else:
-            # 기존 상태 사용 (컬럼 align)
+            # 기존 상태 유지
             prev_df = st.session_state[state_key]
             table_df = base_df.copy()
             if "선택" not in prev_df.columns:
                 prev_df["선택"] = False
-            # 인덱스 기준으로 선택 상태 복원
             table_df["선택"] = prev_df["선택"].reindex(table_df.index).fillna(False)
 
-        st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면 아래에 세부 역량이 나타납니다.")
+        st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면, 아래에 세부 역량이 나타납니다. (항상 하나만 선택됩니다)")
 
-        # 🔹 편집 가능한 테이블 (체크박스)
+        # 🔹 편집 가능한 테이블 (체크박스 포함)
         editor_df = st.data_editor(
             table_df,
             key="skills_editor",
@@ -196,41 +194,23 @@ def main():
             },
         )
 
-        # === ✅ 하나만 선택되도록 강제하는 로직 ===
+        # === ✅ 여기서 "무조건 하나만" 선택되도록 강제 ===
         df_final = editor_df.copy()
-        prev_idx = st.session_state.get(selected_idx_key, None)
 
-        if "선택" in df_final.columns:
-            true_indices = df_final.index[df_final["선택"] == True].tolist()
+        selected_indices = df_final.index[df_final.get("선택", False) == True].tolist()
 
-            if not true_indices:
-                # 아무 것도 선택 안 된 상태
-                selected_idx = None
-            elif len(true_indices) == 1:
-                # 하나만 선택된 상태
-                selected_idx = true_indices[0]
-            else:
-                # 2개 이상 체크된 경우 → 이전 선택과 비교해서 "새로 클릭된 것"만 남기기
-                if prev_idx in true_indices:
-                    candidates = [i for i in true_indices if i != prev_idx]
-                    selected_idx = candidates[-1] if candidates else prev_idx
-                else:
-                    selected_idx = true_indices[-1]
-
-            # 이제 selected_idx만 True, 나머지는 False로 강제
-            if selected_idx is None:
-                df_final["선택"] = False
-            else:
-                df_final["선택"] = False
-                if selected_idx in df_final.index:
-                    df_final.loc[selected_idx, "선택"] = True
-
-            st.session_state[selected_idx_key] = selected_idx
-        else:
+        if not selected_indices:
             selected_idx = None
+        else:
+            # 여러 개 체크되어 있으면 "가장 마지막에 체크된 것"만 남기고 나머지는 해제
+            selected_idx = selected_indices[-1]
+            df_final["선택"] = False
+            if selected_idx in df_final.index:
+                df_final.loc[selected_idx, "선택"] = True
 
-        # 상태 업데이트
+        # 상태 저장
         st.session_state[state_key] = df_final
+        st.session_state[selected_idx_key] = selected_idx
 
         # === 아래에 세부 역량 출력 ===
         st.markdown("---")
@@ -259,6 +239,7 @@ def main():
                     st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
     
+
 
 if __name__ == "__main__":
     main()
