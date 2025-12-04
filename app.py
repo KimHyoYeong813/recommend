@@ -97,32 +97,9 @@ def main():
     # 선택한 직무 기준 필터링
     filtered_df = filter_by_category(df, selected_category)
 
-    st.subheader("2️⃣ 선택한 분야 상위 키워드")
-
-    if filtered_df.empty:
-        st.warning("해당 분야에 대한 데이터가 없습니다. CSV 내용을 다시 확인해 주세요.")
-    else:
-        view_cols = ["word", "count", "total_posts"]
-        if "ratio" in filtered_df.columns:
-            view_cols.append("ratio")
-
-        st.dataframe(
-            filtered_df[view_cols],
-            use_container_width=True,
-        )
-
-        # 상위 10개 막대그래프
-        st.subheader("3️⃣ 키워드 빈도 시각화 (상위 10개)")
-
-        top_n = min(10, len(filtered_df))
-        chart_df = filtered_df.head(top_n)[["word", "count"]].set_index("word")
-
-        st.bar_chart(chart_df)
-
-    # 원본 전체 보기
-    with st.expander("📂 원본 데이터 전체 보기"):
-        st.dataframe(df, use_container_width=True)
+   
 
 
 if __name__ == "__main__":
     main()
+
