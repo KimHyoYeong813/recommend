@@ -72,16 +72,25 @@ def filter_by_category(df: pd.DataFrame, category_value: str):
 def main():
     st.set_page_config(page_title="AI 역량 키워드 뷰어", layout="wide")
 
-    # === 화면 패딩 조정 (좌우 넓게, 위/아래는 좁게) ===
+    # === 화면 패딩 조정: 위/아래는 얇게, 좌/우는 넓게 ===
     st.markdown(
         """
         <style>
+            /* 전체 뷰 컨테이너 패딩 조정 */
+            [data-testid="stAppViewContainer"] > .main > div {
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+                padding-left: 3rem;
+                padding-right: 3rem;
+            }
+            /* block-container에도 한 번 더 지정 (버전 호환용) */
             .block-container {
                 padding-top: 0.5rem;
                 padding-bottom: 0.5rem;
-                padding-left: 2rem;
-                padding-right: 2rem;
+                padding-left: 3rem !important;
+                padding-right: 3rem !important;
             }
+            /* selectbox, radio의 label 텍스트 숨기기 */
             .stSelectbox label, .stRadio label {
                 display: none !important;
             }
