@@ -42,8 +42,9 @@ def get_categories(df: pd.DataFrame):
 def filter_by_category(df: pd.DataFrame, category_value: str):
     """
     선택한 category(직무) 기준으로 데이터 필터링.
-    count 기준 내림차순 정렬, 인덱스 1부터 설정, word → '요구 역량'으로 변경.
-    total_posts는 나중에 캡션으로 쓰기 위해 일단 유지.
+    - count 내림차순 정렬
+    - 인덱스 1부터 시작
+    - word -> '요구 역량'으로 컬럼명 변경
     """
     filtered = df[df["category"] == category_value].copy()
     filtered = filtered.sort_values("count", ascending=False).reset_index(drop=True)
@@ -75,7 +76,7 @@ def main():
 
     st.caption("현재 CSV 컬럼: " + ", ".join(df.columns.astype(str)))
 
-    # === 직무 카테고리 버튼 UI ===
+    # === 1️⃣ 관심 있는 직무 선택 (selectbox) ===
     st.subheader("1️⃣ 관심 있는 직무 선택")
 
     categories = get_categories(df)
@@ -83,28 +84,14 @@ def main():
         st.error("category 컬럼에 값이 없습니다. CSV 데이터를 확인해 주세요.")
         st.stop()
 
-    if "selected_category" not in st.session_state:
-        st.session_state["selected_category"] = categories[0]
+    selected_category = st.selectbox(
+        "관심 있는 직무(분야)를 선택하세요",
+        options=categories,
+        index=0,
+    )
 
-    st.write("관심 있는 직무(분야)를 클릭하세요:")
 
-    num_cols = 3
-    cols = st.columns(num_cols)
-
-    for idx, cat in enumerate(categories):
-        col = cols[idx % num_cols]
-        if cat == st.session_state["selected_category"]:
-            button_label = f"✅ {cat}"
-        else:
-            button_label = cat
-
-        if col.button(button_label, key=f"cat_btn_{cat}"):
-            st.session_state["selected_category"] = cat
-
-    selected_category = st.session_state["selected_category"]
-    st.write(f"### 선택한 분야: **{selected_category}**")
-
-    # === 선택한 직무 기준 필터링 ===
+    # === 2️⃣ 선택한 분야 상위 키워드 ===
     filtered_df = filter_by_category(df, selected_category)
 
     st.subheader("2️⃣ 선택한 분야 상위 키워드")
@@ -124,7 +111,6 @@ def main():
             st.caption(f"전체 공고 수: {total_posts_value}")
 
         # 🔹 표에서는 '요구 역량'과 'count'만 보여주기
-        # total_posts, ratio 컬럼은 제거
         drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
         display_df = filtered_df.drop(columns=drop_cols, errors="ignore")
 
@@ -132,7 +118,6 @@ def main():
         display_df = display_df[view_cols]
 
         st.dataframe(display_df, use_container_width=True)
-
 
 
 
