@@ -34,6 +34,7 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
+    # 필요하면 여기 계속 추가
 }
 
 
@@ -55,12 +56,10 @@ def load_keyword_data():
     return df
 
 
-# === 카테고리 추출 ===
 def get_categories(df: pd.DataFrame):
     return sorted(df["category"].dropna().unique().tolist())
 
 
-# === 선택한 카테고리 정보를 필터링 ===
 def filter_by_category(df: pd.DataFrame, category_value: str):
     filtered = df[df["category"] == category_value].copy()
     filtered = filtered.sort_values("count", ascending=False).reset_index(drop=True)
@@ -68,73 +67,63 @@ def filter_by_category(df: pd.DataFrame, category_value: str):
     return filtered
 
 
-# === 메인 ===
 def main():
     st.set_page_config(page_title="AI 역량 키워드 뷰어", layout="wide")
 
-    # === 화면 패딩 조정: 위/아래는 얇게, 좌/우는 넓게 ===
-    st.markdown(
-        """
-        <style>
-            /* 전체 뷰 컨테이너 패딩 조정 */
-            [data-testid="stAppViewContainer"] > .main > div {
-                padding-top: 0.5rem;
-                padding-bottom: 0.5rem;
-                padding-left: 3rem;
-                padding-right: 3rem;
-            }
-            /* block-container에도 한 번 더 지정 (버전 호환용) */
-            .block-container {
-                padding-top: 0.5rem;
-                padding-bottom: 0.5rem;
-                padding-left: 3rem !important;
-                padding-right: 3rem !important;
-            }
-            /* selectbox, radio의 label 텍스트 숨기기 */
-            .stSelectbox label, .stRadio label {
-                display: none !important;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # === 제목 ===
-    st.title("📊 분야별 AI 역량 키워드")
-
-    # === 데이터 읽기 ===
+    # 데이터 읽기
     df = load_keyword_data()
-
-    # === 직무 선택 (라벨 숨김) ===
     categories = get_categories(df)
-    selected_category = st.selectbox("", options=categories, index=0)
 
-    # === 데이터 필터링 ===
-    filtered_df = filter_by_category(df, selected_category)
+    # 🔲 양옆 여백용 컬럼 (왼쪽 비움 / 가운데 사용 / 오른쪽 비움)
+    # 비율 [1, 4, 1]이라 가운데 4, 양 옆 1씩 여백 느낌
+    left_col, main_col, right_col = st.columns([1, 4, 1])
 
-    # === 전체 공고 수 표시 ===
-    if "total_posts" in filtered_df.columns:
-        st.caption(f"전체 공고 수: {filtered_df['total_posts'].iloc[0]}")
+    with main_col:
+        # 제목
+        st.title("📊 분야별 AI 역량 키워드")
 
-    # === 상위 키워드 표 ===
-    table_df = filtered_df[["요구 역량", "count"]].copy()
-    table_df.index = range(1, len(table_df) + 1)
-    st.dataframe(table_df, use_container_width=True)
+        # 직무 선택 (라벨은 빈 문자열)
+        selected_category = st.selectbox(
+            "",
+            options=categories,
+            index=0,
+        )
 
-    # === 요구 역량 라디오 선택 ===
-    skill_options = table_df["요구 역량"].tolist()
-    selected_skill = st.radio("", options=skill_options, index=0, horizontal=False)
+        # 필터링
+        filtered_df = filter_by_category(df, selected_category)
 
-    # === 세부 역량 출력 ===
-    st.markdown("---")
-    st.markdown(f"### 🔍 {selected_skill}의 세부 역량")
+        # 전체 공고 수
+        if "total_posts" in filtered_df.columns:
+            st.caption(f"전체 공고 수: {filtered_df['total_posts'].iloc[0]}")
 
-    details = DETAIL_MAP.get(selected_skill)
-    if details:
-        for d in details:
-            st.markdown(f"- {d}")
-    else:
-        st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
+        # 상위 키워드 표
+        table_df = filtered_df[["요구 역량", "count"]].copy()
+        table_df.index = range(1, len(table_df) + 1)
+        st.dataframe(table_df, use_container_width=True)
+
+        # 요구 역량 선택 (라벨 비움)
+        skill_options = table_df["요구 역량"].tolist()
+        if not skill_options:
+            st.warning("표시할 요구 역량이 없습니다.")
+            return
+
+        selected_skill = st.radio(
+            "",
+            options=skill_options,
+            index=0,
+            horizontal=False,
+        )
+
+        # 세부 역량 출력
+        st.markdown("---")
+        st.markdown(f"### 🔍 {selected_skill}의 세부 역량")
+
+        details = DETAIL_MAP.get(selected_skill)
+        if details:
+            for d in details:
+                st.markdown(f"- {d}")
+        else:
+            st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
 
 if __name__ == "__main__":
