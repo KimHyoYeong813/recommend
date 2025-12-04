@@ -10,27 +10,27 @@ CSV_PATH = os.path.join(BASE_DIR, CSV_NAME)
 # === 0-1. 세부 역량 매핑 (예시) ===
 DETAIL_MAP = {
     "웹개발": [
-        "HTML/CSS 마크업 이해",
+        "HTML/CSS 마크업 기본 및 시맨틱 태그 이해",
         "JavaScript 기본 문법 및 DOM 조작",
-        "프론트엔드 프레임워크 경험 (예: React, Vue)",
-        "웹 프레임워크 사용 경험 (예: Django, Spring, Node.js)",
-        "REST API 연동 경험",
+        "프론트엔드 프레임워크 사용 경험 (예: React, Vue)",
+        "웹 프레임워크 사용 경험 (예: Django, Spring, Node.js 등)",
+        "REST API 연동 및 JSON 데이터 처리 경험",
         "반응형 웹, 크로스 브라우저 이슈 이해",
         "Git 등 형상관리 도구 사용 경험",
     ],
     "서버개발": [
         "하나 이상의 서버 언어 사용 경험 (예: Java, Python, Node.js)",
-        "웹 프레임워크 경험 (예: Spring Boot, Django, Express)",
-        "RDBMS 설계 및 SQL 활용",
+        "웹 프레임워크 경험 (예: Spring Boot, Django, Express 등)",
+        "RDBMS 설계 및 SQL 활용 능력",
         "API 설계 및 문서화 경험",
         "배포/운영 환경 이해 (Linux, Cloud, Docker 등)",
         "로그 분석 및 모니터링 기본",
     ],
     "데이터분석": [
-        "Python 기반 데이터 분석 (Pandas, NumPy)",
+        "Python 기반 데이터 분석 (Pandas, NumPy 등)",
         "시각화 도구 활용 (Matplotlib, Seaborn, Plotly 등)",
-        "기본 통계 지식 및 가설검정",
-        "기계학습 라이브러리 사용 (scikit-learn 등)",
+        "기본 통계 지식 및 가설검정 이해",
+        "기계학습 라이브러리 사용 경험 (scikit-learn 등)",
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
@@ -122,10 +122,10 @@ def main():
 
     st.write(f"### 선택한 분야: **{selected_category}**")
 
-    # === 2️⃣ 선택한 분야 상위 키워드 ===
-    filtered_df = filter_by_category(df, selected_category)
-
+    # === 2️⃣ 선택한 분야 상위 키워드 및 세부 역량 ===
     st.subheader("2️⃣ 선택한 분야 상위 키워드")
+
+    filtered_df = filter_by_category(df, selected_category)
 
     if filtered_df.empty:
         st.warning("해당 데이터가 없습니다.")
@@ -157,18 +157,17 @@ def main():
 
         display_df = display_df[existing_cols]
 
+        # 표 출력
         st.dataframe(display_df, use_container_width=True)
 
-        
-
-        # === 3️⃣ 세부 역량 보기 ===
-        st.subheader("3️⃣ 선택한 요구 역량의 세부 역량")
+        # 🔹 같은 2번 섹션 안에서, 요구 역량 선택 → 세부 역량 출력
+        st.markdown("**세부 역량을 보고 싶은 요구 역량을 선택해 보세요.**")
 
         skill_options = display_df["요구 역량"].unique().tolist()
-
-        selected_skill = st.selectbox(
-            "세부 역량을 보고 싶은 요구 역량을 선택하세요:",
+        selected_skill = st.radio(
+            "요구 역량 선택",
             options=skill_options,
+            horizontal=False,
         )
 
         st.write(f"**선택한 요구 역량:** {selected_skill}")
@@ -182,7 +181,7 @@ def main():
         else:
             st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
-    
+        
 
 
 if __name__ == "__main__":
