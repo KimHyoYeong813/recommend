@@ -34,7 +34,7 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # TODO: 여기다가 "앱개발", "AI 서비스 기획" 등도 계속 추가하면 됨
+    # TODO: 여기다가 "소프트웨어개발", "앱개발" 등 실제 키워드들을 계속 추가하면 됨
 }
 
 
@@ -121,7 +121,7 @@ def main():
     
 
     # === 2️⃣ 선택한 분야 상위 키워드 (행의 '선택' → 세부 역량) ===
-    st.subheader("2️⃣ 선택한 분야 상위 키워드 ")
+    st.subheader("2️⃣ 선택한 분야 상위 키워드")
 
     filtered_df = filter_by_category(df, selected_category)
 
@@ -155,26 +155,45 @@ def main():
 
     base_df = base_df[existing_cols]
 
-    # === ✅ 선택 상태: "현재 선택된 요구 역량 이름"만 기억 ===
-    selected_skill_state_key = "selected_skill"
+    # === 선택 상태 관련 키 ===
+    prev_df_key = "skills_prev_df"
+    selected_skill_key = "selected_skill"
     current_category_key = "current_category"
 
-    # 카테고리가 바뀌면 선택 초기화
+    # 카테고리가 바뀌면 이전 상태 초기화
     if st.session_state.get(current_category_key) != selected_category:
         st.session_state[current_category_key] = selected_category
-        st.session_state[selected_skill_state_key] = None
+        st.session_state[prev_df_key] = None
+        st.session_state[selected_skill_key] = None
 
-    current_selected_skill = st.session_state.get(selected_skill_state_key)
+    # 이전 상태 가져오기
+    prev_df = st.session_state.get(prev_df_key)
+    prev_selected_skill = st.session_state.get(selected_skill_key)
 
-    # 현재 선택된 요구 역량에 맞춰 "선택" 컬럼 구성
-    table_df = base_df.copy()
-    table_df["선택"] = table_df["요구 역량"] == current_selected_skill
+    # prev_df가 없으면 처음 상태 생성 (선택=False)
+    if prev_df is None:
+        prev_df = base_df.copy()
+        prev_df["선택"] = False
 
-    st.caption("※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면, 아래에 세부 역량이 나타납니다. ")
+    # 현재 선택된 요구 역량이 있다면 prev_df의 선택 상태 반영
+    if prev_selected_skill:
+        prev_df = prev_df.copy()
+        prev_df["선택"] = prev_df["요구 역량"] == prev_selected_skill
+    else:
+        # 선택이 없는 상태라면 전부 False
+        if "선택" not in prev_df.columns:
+            prev_df["선택"] = False
+        else:
+            prev_df["선택"] = prev_df["선택"].fillna(False)
 
-    # 편집 가능한 테이블
+    st.caption(
+        "※ 보고 싶은 '요구 역량' 행의 **선택** 칸을 클릭하면, "
+        "아래에 해당 역량의 세부 역량이 나타납니다. (항상 하나만 선택되도록 동작합니다)"
+    )
+
+    # 🔹 편집 가능한 테이블 (체크박스 포함)
     editor_df = st.data_editor(
-        table_df,
+        prev_df,
         key="skills_editor",
         use_container_width=True,
         hide_index=True,
@@ -189,23 +208,47 @@ def main():
         },
     )
 
-    # 🔍 사용자가 이번에 체크한 값들 기반으로 "선택된 요구 역량" 하나만 갱신
-    new_checked_rows = editor_df[editor_df.get("선택", False) == True]
+    # === ✅ 이전 상태(prev_df) vs 현재 상태(editor_df) 비교해서 "이번에 새로 체크된 행" 찾기 ===
+    prev_sel = prev_df["선택"].fillna(False) if "선택" in prev_df.columns else pd.Series(False, index=prev_df.index)
+    curr_sel = editor_df["선택"].fillna(False) if "선택" in editor_df.columns else pd.Series(False, index=editor_df.index)
 
-    if new_checked_rows.empty:
-        new_selected_skill = None
+    # 변화가 일어난 곳
+    changed = curr_sel != prev_sel
+
+    newly_checked_idx = editor_df.index[(changed) & (curr_sel)].tolist()  # False→True 된 곳
+    currently_checked_idx = editor_df.index[curr_sel].tolist()
+
+    if newly_checked_idx:
+        # 이번에 새로 True가 된 행이 있다면 → 그게 "방금 클릭한 요구 역량"
+        selected_idx = newly_checked_idx[-1]  # 여러 개면 마지막 것
+        selected_skill = editor_df.loc[selected_idx, "요구 역량"]
     else:
-        # 여러 개 체크돼 있어도 "가장 아래(마지막) 행" 기준으로 선택
-        new_selected_skill = new_checked_rows.iloc[-1]["요구 역량"]
+        # 새로 True가 된 게 없으면 (예: 기존 선택 해제, 혹은 변화 없음)
+        if currently_checked_idx:
+            # 그래도 True인 게 있다면, 그 중 첫 번째를 선택으로 유지
+            selected_idx = currently_checked_idx[0]
+            selected_skill = editor_df.loc[selected_idx, "요구 역량"]
+        else:
+            # 전부 False라면 선택 없음
+            selected_idx = None
+            selected_skill = None
+
+    # 논리적으로는 하나만 True가 되도록 정리한 df 생성 (다음 렌더링에 사용됨)
+    final_df = editor_df.copy()
+    if selected_idx is None:
+        final_df["선택"] = False
+    else:
+        final_df["선택"] = False
+        if selected_idx in final_df.index:
+            final_df.loc[selected_idx, "선택"] = True
 
     # 상태 업데이트
-    st.session_state[selected_skill_state_key] = new_selected_skill
+    st.session_state[prev_df_key] = final_df
+    st.session_state[selected_skill_key] = selected_skill
 
-    # === 아래에 세부 역량 출력 ===
+    # === 🔍 아래에 세부 역량 출력 ===
     st.markdown("---")
     st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
-
-    selected_skill = st.session_state.get(selected_skill_state_key)
 
     if not selected_skill:
         st.caption("위 표에서 보고 싶은 요구 역량 행의 **선택** 칸을 클릭하면, 아래에 세부 역량이 나타납니다.")
@@ -222,7 +265,6 @@ def main():
             st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
    
-
 
 if __name__ == "__main__":
     main()
