@@ -7,7 +7,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_NAME = "직무별_단순빈도_TOP10(final).csv"
 CSV_PATH = os.path.join(BASE_DIR, CSV_NAME)
 
-# === 0-1. 세부 역량 매핑 (여기에 많이 넣어도 됨) ===
+# === 세부 역량 매핑 ===
 DETAIL_MAP = {
     "웹개발": [
         "HTML/CSS 마크업 기본 및 시맨틱 태그 이해",
@@ -34,11 +34,10 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # TODO: 계속 추가 가능
 }
 
 
-# === 1. 데이터 로드 함수 ===
+# === 데이터 로드 ===
 @st.cache_data
 def load_keyword_data():
     if not os.path.exists(CSV_PATH):
@@ -53,14 +52,15 @@ def load_keyword_data():
     missing = required_cols - set(df.columns)
     if missing:
         raise KeyError(f"다음 컬럼이 CSV에 없습니다: {missing}")
-
     return df
 
 
+# === 카테고리 추출 ===
 def get_categories(df: pd.DataFrame):
     return sorted(df["category"].dropna().unique().tolist())
 
 
+# === 선택한 카테고리 정보를 필터링 ===
 def filter_by_category(df: pd.DataFrame, category_value: str):
     filtered = df[df["category"] == category_value].copy()
     filtered = filtered.sort_values("count", ascending=False).reset_index(drop=True)
@@ -68,83 +68,55 @@ def filter_by_category(df: pd.DataFrame, category_value: str):
     return filtered
 
 
+# === 메인 ===
 def main():
-    st.set_page_config(
-        page_title="AI 역량 키워드 뷰어",
-        layout="wide",
-    )
+    st.set_page_config(page_title="AI 역량 키워드 뷰어", layout="wide")
 
-    # === 화면 패딩 줄이기 ===
+    # === 화면 패딩 조정 (좌우 넓게, 위/아래는 좁게) ===
     st.markdown(
         """
         <style>
             .block-container {
-                padding-top: 1rem;
-                padding-bottom: 1rem;
-                padding-left: 1rem;
-                padding-right: 1rem;
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+                padding-left: 2rem;
+                padding-right: 2rem;
+            }
+            .stSelectbox label, .stRadio label {
+                display: none !important;
             }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    st.title("📊 분야별 자주 요구되는 AI 역량 키워드")
+    # === 제목 ===
+    st.title("📊 분야별 AI 역량 키워드")
 
-    # 데이터 로드
-    try:
-        df = load_keyword_data()
-    except Exception as e:
-        st.error(f"❌ 데이터 오류 발생: {e}")
-        st.stop()
+    # === 데이터 읽기 ===
+    df = load_keyword_data()
 
-    st.caption("현재 CSV 컬럼: " + ", ".join(df.columns.astype(str)))
-
-    # 1️⃣ 직무 선택
-    st.subheader("1️⃣ 관심 있는 직무 선택")
-
+    # === 직무 선택 (라벨 숨김) ===
     categories = get_categories(df)
-    if not categories:
-        st.error("category 컬럼에 값이 없습니다. CSV 데이터를 확인해 주세요.")
-        st.stop()
+    selected_category = st.selectbox("", options=categories, index=0)
 
-    selected_category = st.selectbox(
-        "관심 있는 분야를 선택하세요:",
-        options=categories,
-        index=0,
-    )
-
-    st.write(f"### 선택한 분야: **{selected_category}**")
-
-    # 2️⃣ 상위 키워드 표 + 라디오 선택
-    st.subheader("2️⃣ 선택한 분야 상위 키워드")
-
+    # === 데이터 필터링 ===
     filtered_df = filter_by_category(df, selected_category)
-    if filtered_df.empty:
-        st.warning("해당 데이터가 없습니다.")
-        st.stop()
 
-    # 전체 공고 수 표시
+    # === 전체 공고 수 표시 ===
     if "total_posts" in filtered_df.columns:
-        total_posts_value = filtered_df["total_posts"].iloc[0]
-        st.caption(f"전체 공고 수: {total_posts_value}")
+        st.caption(f"전체 공고 수: {filtered_df['total_posts'].iloc[0]}")
 
+    # === 상위 키워드 표 ===
     table_df = filtered_df[["요구 역량", "count"]].copy()
     table_df.index = range(1, len(table_df) + 1)
-
     st.dataframe(table_df, use_container_width=True)
 
-    st.markdown("**세부 역량을 보고 싶은 키워드를 선택하세요.**")
-
+    # === 요구 역량 라디오 선택 ===
     skill_options = table_df["요구 역량"].tolist()
-    selected_skill = st.radio(
-        "요구 역량 선택:",
-        options=skill_options,
-        index=0,
-        horizontal=False,
-    )
+    selected_skill = st.radio("", options=skill_options, index=0, horizontal=False)
 
-    # 🔍 세부 역량 표시
+    # === 세부 역량 출력 ===
     st.markdown("---")
     st.markdown(f"### 🔍 {selected_skill}의 세부 역량")
 
