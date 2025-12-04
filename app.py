@@ -34,7 +34,7 @@ DETAIL_MAP = {
         "데이터 전처리 및 피처 엔지니어링",
         "SQL을 활용한 데이터 추출 경험",
     ],
-    # 필요하면 계속 추가!
+    # 필요할 때 계속 추가 가능!
 }
 
 
@@ -63,9 +63,7 @@ def load_keyword_data():
 
 
 def get_categories(df: pd.DataFrame):
-    """
-    category 컬럼에서 선택 가능한 직무 목록 가져오기.
-    """
+    """category 컬럼에서 선택 가능한 직무 목록 가져오기."""
     return sorted(df["category"].dropna().unique().tolist())
 
 
@@ -73,14 +71,14 @@ def filter_by_category(df: pd.DataFrame, category_value: str):
     """
     선택한 category(직무) 기준으로 데이터 필터링.
     - count 내림차순 정렬
-    - 인덱스 1부터 시작
+    - '순위' 컬럼(1부터 시작) 추가
     - word -> '요구 역량'으로 컬럼명 변경
     """
     filtered = df[df["category"] == category_value].copy()
     filtered = filtered.sort_values("count", ascending=False).reset_index(drop=True)
 
-    # 인덱스 1부터 시작
-    filtered.index = range(1, len(filtered) + 1)
+    # 순위 컬럼 (1부터 시작)
+    filtered["순위"] = range(1, len(filtered) + 1)
 
     # word → 요구 역량
     filtered.rename(columns={"word": "요구 역량"}, inplace=True)
@@ -122,15 +120,15 @@ def main():
 
     st.write(f"### 선택한 분야: **{selected_category}**")
 
-    # === 2️⃣ 선택한 분야 상위 키워드 및 세부 역량 ===
-    st.subheader("2️⃣ 선택한 분야 상위 키워드")
+    # === 2️⃣ 선택한 분야 상위 키워드 & 세부 역량 ===
+    st.subheader("2️⃣ 선택한 분야 상위 키워드 (클릭하면 세부 역량이 나와요)")
 
     filtered_df = filter_by_category(df, selected_category)
 
     if filtered_df.empty:
         st.warning("해당 데이터가 없습니다.")
     else:
-        # 🔹 전체 공고 수(total_posts) 캡션으로 표시
+        # 전체 공고 수 표시
         total_posts_value = None
         if "total_posts" in filtered_df.columns:
             try:
@@ -141,45 +139,65 @@ def main():
         if total_posts_value is not None:
             st.caption(f"전체 공고 수: {total_posts_value}")
 
-        # 🔹 표에서는 '요구 역량'과 'count'만 보여주기
+        # 표에 보여줄 컬럼 구성
         drop_cols = [c for c in ["total_posts", "ratio"] if c in filtered_df.columns]
-        display_df = filtered_df.drop(columns=drop_cols, errors="ignore")
+        table_df = filtered_df.drop(columns=drop_cols, errors="ignore")
 
-        view_cols = ["요구 역량", "count"]
-        existing_cols = [c for c in view_cols if c in display_df.columns]
-
+        # 순위, 요구 역량, count만 표시
+        view_cols = ["순위", "요구 역량", "count"]
+        existing_cols = [c for c in view_cols if c in table_df.columns]
         if not existing_cols:
             st.error(
-                f"표시할 컬럼(요구 역량, count)을 찾을 수 없습니다. "
-                f"현재 컬럼: {list(display_df.columns)}"
+                f"표시할 컬럼(순위, 요구 역량, count)을 찾을 수 없습니다. "
+                f"현재 컬럼: {list(table_df.columns)}"
             )
             st.stop()
 
-        display_df = display_df[existing_cols]
+        table_df = table_df[existing_cols]
 
-        # 표 출력
-        st.dataframe(display_df, use_container_width=True)
+        st.caption("※ 아래 표에서 보고 싶은 '요구 역량' 행을 클릭해 주세요.")
 
-        # 🔹 같은 2번 섹션 안에서, 요구 역량 선택 → 세부 역량 출력
-        st.markdown("**세부 역량을 보고 싶은 요구 역량을 선택해 보세요.**")
-
-        skill_options = display_df["요구 역량"].unique().tolist()
-        selected_skill = st.radio(
-            "요구 역량 선택",
-            options=skill_options,
-            horizontal=False,
+        # 🔹 클릭 가능한 테이블: st.data_editor 사용
+        editor = st.data_editor(
+            table_df,
+            key="skills_table",
+            use_container_width=True,
+            hide_index=True,
+            disabled=True,  # 값은 수정 못 하게 (선택만)
         )
 
-        st.write(f"**선택한 요구 역량:** {selected_skill}")
+        # 선택된 행 정보 읽기
+        selected_skill = None
+        table_state = st.session_state.get("skills_table", {})
+        selection = table_state.get("selection", {}) if isinstance(table_state, dict) else {}
 
-        details = DETAIL_MAP.get(selected_skill)
+        selected_rows = selection.get("rows") if isinstance(selection, dict) else None
 
-        if details:
-            st.markdown("**🔍 이 역량을 위해 도움이 되는 세부 역량 예시:**")
-            for d in details:
-                st.markdown(f"- {d}")
+        if selected_rows:
+            # 첫 번째 선택된 행 사용
+            row_idx = list(selected_rows)[0] if not isinstance(selected_rows, list) else selected_rows[0]
+            try:
+                selected_skill = table_df.iloc[row_idx]["요구 역량"]
+            except Exception:
+                selected_skill = None
+
+        # 아래에 세부 역량 출력
+        st.markdown("---")
+        st.markdown("### 🔍 선택한 요구 역량의 세부 역량")
+
+        if not selected_skill:
+            st.caption("표에서 보고 싶은 요구 역량 행을 클릭하면, 이 아래에 세부 역량이 나타납니다.")
         else:
-            st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
+            st.write(f"**선택한 요구 역량:** {selected_skill}")
+
+            details = DETAIL_MAP.get(selected_skill)
+
+            if details:
+                st.markdown("**이 역량을 위해 도움이 되는 세부 역량 예시:**")
+                for d in details:
+                    st.markdown(f"- {d}")
+            else:
+                st.caption("아직 이 역량에 대한 세부 역량 정보는 준비 중입니다.")
 
         
 
